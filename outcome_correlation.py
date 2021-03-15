@@ -172,7 +172,7 @@ def general_outcome_correlation(adj, y, alpha, num_propagations, post_step, alph
         result = post_step(result)
     return result.to(orig_device)
 
-def label_propagation(data, split_idx, A, alpha, num_propagations, idxs):
+def label_propagation(data, split_idx, device, A, alpha, num_propagations, idxs):
     labels = data.y.data
     c = labels.max() + 1
     n = labels.shape[0]
@@ -181,7 +181,7 @@ def label_propagation(data, split_idx, A, alpha, num_propagations, idxs):
     y[label_idx] = F.one_hot(labels[label_idx],c).float().squeeze(1) 
 
 
-    return general_outcome_correlation(A, y, alpha, num_propagations, post_step=lambda x:torch.clamp(x,0,1), alpha_term=True)
+    return general_outcome_correlation(A, y, alpha, num_propagations, post_step=lambda x:torch.clamp(x,0,1), alpha_term=True, device=device)
 
 def double_correlation_autoscale(data, model_out, split_idx, A1, alpha1, num_propagations1, A2, alpha2, num_propagations2, scale=1.0, train_only=False, device='cuda', display=True):
     train_idx, valid_idx, test_idx = split_idx

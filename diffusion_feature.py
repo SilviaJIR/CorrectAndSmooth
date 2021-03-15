@@ -108,6 +108,9 @@ def preprocess(data, preprocess = "diffusion", num_propagations = 10, p = None, 
             return x
         except:
             print(f'embeddings/{preprocess}{post_fix}.pt not found or not enough iterations! Regenerating it now')
+            # Creates a new file
+            with open(f'embeddings/{preprocess}{post_fix}.pt', 'w') as fp:
+                pass
     
     if preprocess == "community":
         return community(data, post_fix)
