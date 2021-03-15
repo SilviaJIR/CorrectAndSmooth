@@ -148,8 +148,6 @@ def main():
         mlp_fn = double_correlation_fixed
 
 
-
-
     model_outs = glob.glob(f'models/{args.dataset}_{args.method}/*.pt')
     
     if args.method == 'lp':
@@ -163,7 +161,7 @@ def main():
         if args.method == 'plain':
             evaluate_params(data, eval_test, model_outs, split_idx, plain_dict, fn = plain_fn)
         elif args.method == 'linear':
-            evaluate_params(data, eval_test, model_outs, split_idx, linear_dict, fn = linear_fn)
+            evaluate_params(data, eval_test, model_outs, split_idx, linear_dict, fn = linear_fn, device=device)
         elif args.method == 'mlp':
             evaluate_params(data, eval_test, model_outs, split_idx, mlp_dict, fn = mlp_fn)
         elif args.method == 'gat':
@@ -176,6 +174,6 @@ def main():
     
 #     return
 
-    
+
 if __name__ == "__main__":
     main()

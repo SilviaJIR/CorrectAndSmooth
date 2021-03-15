@@ -244,7 +244,7 @@ def only_outcome_correlation(data, model_out, split_idx, A, alpha, num_propagati
     return res_result, result
     
     
-def evaluate_params(data, eval_test, model_outs, split_idx, params, fn=double_correlation_autoscale):
+def evaluate_params(data, eval_test, model_outs, split_idx, params, fn=double_correlation_autoscale, device=None):
     logger = SimpleLogger('evaluate params', [], 2)
 
     for out in model_outs:
@@ -252,7 +252,7 @@ def evaluate_params(data, eval_test, model_outs, split_idx, params, fn=double_co
         if isinstance(model_out, tuple):
             model_out, t = model_out
             split_idx = t
-        res_result, result = fn(data, model_out, split_idx, **params)
+        res_result, result = fn(data, model_out, split_idx, device=device, **params)
         valid_acc, test_acc = eval_test(result, split_idx['valid']), eval_test(result, split_idx['test'])
         print(f"Valid: {valid_acc}, Test: {test_acc}")
         logger.add_result(run, (), (valid_acc, test_acc))
