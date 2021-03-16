@@ -100,3 +100,6 @@ python run_experiments.py --dataset products --method mlp
 Valid acc -> Test acc
 Args []: 91.47 ± 0.09 -> 84.18 ± 0.07
 ```
+
+
+Try it on colab:  https://colab.research.google.com/drive/1RGAyqqRLZPu7OqRCovRdbQHNgeHjaHAq?usp=sharing
