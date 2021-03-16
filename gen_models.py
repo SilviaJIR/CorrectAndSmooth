@@ -31,10 +31,10 @@ class MLP(torch.nn.Module):
         self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
         self.bns = torch.nn.ModuleList()
         self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
-        for _ in range(num_layers - 2):
-            self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
-            self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
-        self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
+        # for _ in range(num_layers - 2):
+        #     self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
+        #     self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
+        # self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
 
         self.dropout = dropout
         self.relu_first = relu_first
@@ -56,8 +56,9 @@ class MLP(torch.nn.Module):
 
 
             x = F.dropout(x, p=self.dropout, training=self.training)
-        x = self.lins[-1](x)
-        return F.log_softmax(x, dim=-1)
+        # x = self.lins[-1](x)
+        # return F.log_softmax(x, dim=-1)
+        return x
 
 
 
@@ -70,7 +71,8 @@ class MLPLinear(torch.nn.Module):
         self.lin.reset_parameters()
 
     def forward(self, x):
-        return F.log_softmax(self.lin(x), dim=-1)
+        # return F.log_softmax(self.lin(x), dim=-1)
+        return self.lin(x)
 
 
 class SGC(torch.nn.Module):
@@ -90,13 +92,28 @@ class SGC(torch.nn.Module):
         return self.W(x)
 
 
+# class Breadth(torch.nn.Module):
+#     def __init__(self, in_dim, out_dim, headnum):
+#         super(Breadth, self).__init__()
+#         self.gatconv = GATConv(in_dim, out_dim, heads=headnum)
+#     def forward(self, x, edge_index):
+#         x = torch.tanh(self.gatconv(x, edge_index))
+#         return x
+
+
 class Breadth(torch.nn.Module):
-    def __init__(self, in_dim, out_dim, headnum):
+    def __init__(self, in_dim, out_dim, num_layers=1, dropout=0.5, last=False):
         super(Breadth, self).__init__()
-        self.gatconv = GATConv(in_dim, out_dim, heads=headnum)
+        if not last:
+            self.sgcconv = MLP(in_dim, out_dim, out_dim, num_layers, dropout)
+        else:
+            self.sgcconv = MLPLinear(in_dim, out_dim)
     def forward(self, x, edge_index):
-        x = torch.tanh(self.gatconv(x, edge_index))
+        x = torch.tanh(self.sgcconv(x))
         return x
+
+
+
 
 class Depth(torch.nn.Module):
     def __init__(self, in_dim, hidden):
@@ -111,7 +128,10 @@ class Depth(torch.nn.Module):
 class GeniePathLayer(torch.nn.Module):
     def __init__(self, in_dim, dim, headnum, lstm_hidden):
         super(GeniePathLayer, self).__init__()
-        self.breadth_func = Breadth(in_dim, dim, headnum)
+        #gat
+        #self.breadth_func = Breadth(in_dim, dim, headnum)
+        self.breadth_func = Breadth(in_dim, dim, 1, 0.5)
+
         self.depth_func = Depth(dim, lstm_hidden)
 
     def forward(self, x, edge_index, h, c):
@@ -156,9 +176,10 @@ class GeniePathLazy(torch.nn.Module):
         self.lstm_hidden = lstm_hidden
         self.lin1 = torch.nn.Linear(in_dim, dim)
         #if breadth_model == 'GAT':
-        self.breaths = torch.nn.ModuleList([Breadth(dim, dim, head_num) for i in range(num_layer)])
+        #self.breaths = torch.nn.ModuleList([Breadth(dim, dim, head_num) for i in range(num_layer)])
         # elif breadth_model == 'SGC':
-        #     self.breaths = torch.nn.ModuleList([Breadth(dim, dim, normalization, degree, device) for i in range(num_layer)])
+        self.breaths = torch.nn.ModuleList([Breadth(dim, dim, last=False) for i in range(num_layer)-1])
+        self.breaths.append(Breadth(dim, dim, last=True))
         self.depths = torch.nn.ModuleList([Depth(dim * 2, lstm_hidden) for i in range(num_layer)])
         self.lin2 = torch.nn.Linear(dim, out_dim)
         self.residual_weight = residual_weight
