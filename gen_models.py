@@ -58,8 +58,8 @@ class MLP(torch.nn.Module):
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.lins[-1](x)
         return F.log_softmax(x, dim=-1)
-    
-    
+
+
 
 class MLPLinear(torch.nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -72,13 +72,32 @@ class MLPLinear(torch.nn.Module):
     def forward(self, x):
         return F.log_softmax(self.lin(x), dim=-1)
 
-    
+
+class SGC(torch.nn.Module):
+    """
+    A Simple PyTorch Implementation of Logistic Regression.
+    Assuming the features have been preprocessed with k-step graph propagation.
+    """
+    def __init__(self, nfeat, nclass):
+        super(SGC, self).__init__()
+
+        self.W = torch.nn.Linear(nfeat, nclass)
+
+    def reset_parameters(self):
+        self.W.reset_parameters()
+
+    def forward(self, x):
+        return self.W(x)
+
+
 def train(model, x, y_true, train_idx, optimizer):
     model.train()
 
     optimizer.zero_grad()
     out = model(x[train_idx])
-    loss = F.nll_loss(out, y_true.squeeze(1)[train_idx])
+    # loss = F.nll_loss(out, y_true.squeeze(1)[train_idx])
+    loss = F.cross_entropy(out, y_true.squeeze(1)[train_idx])
+
     loss.backward()
     optimizer.step()
 
@@ -159,6 +178,8 @@ def main():
         model = MLPLinear(x.size(-1), dataset.num_classes).to(device)
     elif args.model=='plain':
         model = MLPLinear(x.size(-1), dataset.num_classes).to(device)
+    elif args.model=='sgc':
+        model = SGC(x.size(-1), dataset.num_classes).to(device)
 
     x = x.to(device)
     y_true = data.y.to(device)
@@ -186,13 +207,14 @@ def main():
             if valid_acc > best_valid:
                 best_valid = valid_acc
                 best_out = out.cpu().exp()
-        
-            print(f'Run: {run + 1:02d}, '
-                      f'Epoch: {epoch:02d}, '
-                      f'Loss: {loss:.4f}, '
-                      f'Train: {100 * train_acc:.2f}%, '
-                      f'Valid: {100 * valid_acc:.2f}% '
-                      f'Test: {100 * test_acc:.2f}%')
+
+            if (epoch % 10 == 0):
+                print(f'Run: {run + 1:02d}, '
+                          f'Epoch: {epoch:02d}, '
+                          f'Loss: {loss:.4f}, '
+                          f'Train: {100 * train_acc:.2f}%, '
+                          f'Valid: {100 * valid_acc:.2f}% '
+                          f'Test: {100 * test_acc:.2f}%')
             logger.add_result(run, result)
 
         logger.print_statistics(run)

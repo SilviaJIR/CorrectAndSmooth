@@ -149,7 +149,7 @@ def main():
 
 
     model_outs = glob.glob(f'models/{args.dataset}_{args.method}/*.pt')
-    
+
     if args.method == 'lp':
         out = label_propagation(data, split_idx, device=device, **lp_dict)
         print('Valid acc: ', eval_test(out, split_idx['valid']))
@@ -165,7 +165,9 @@ def main():
         elif args.method == 'mlp':
             evaluate_params(data, eval_test, model_outs, split_idx, mlp_dict, fn = mlp_fn)
         elif args.method == 'gat':
-            evaluate_params(data, eval_test, model_outs, split_idx, gat_dict, fn = gat_fn) 
+            evaluate_params(data, eval_test, model_outs, split_idx, gat_dict, fn = gat_fn)
+        elif args.method == 'sgc':
+            evaluate_params(data, eval_test, model_outs, split_idx, linear_dict, fn = linear_fn, device=device)
 #         import pdb; pdb.set_trace()
         break
         

@@ -107,6 +107,8 @@ def model_load(file, device='cpu'):
         split = torch.load(f'{file}.split', map_location='cpu')
     except:
         split = None
+
+    result = F.softmax(result, dim=1)
     
     mx_diff = (result.sum(dim=-1) - 1).abs().max()
     if mx_diff > 1e-1:
