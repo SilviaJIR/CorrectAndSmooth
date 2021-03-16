@@ -168,6 +168,8 @@ def main():
             evaluate_params(data, eval_test, model_outs, split_idx, gat_dict, fn = gat_fn)
         elif args.method == 'sgc':
             evaluate_params(data, eval_test, model_outs, split_idx, linear_dict, fn = linear_fn, device=device)
+        elif args.method == 'genie':
+            evaluate_params(data, eval_test, model_outs, split_idx, linear_dict, fn = linear_fn, device=device)
 #         import pdb; pdb.set_trace()
         break
         
