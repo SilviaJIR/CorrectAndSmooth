@@ -201,10 +201,13 @@ def train(model, x, y_true, train_idx, optimizer, genie=False, adj_t=None):
 
 
 @torch.no_grad()
-def test(model, x, y, split_idx, evaluator):
+def test(model, x, y, split_idx, evaluator, genie=False, adj_t=None):
     model.eval()
 
-    out = model(x)
+    if genie:
+        out = model(x, adj_t)
+    else: out = model(x)
+
     y_pred = out.argmax(dim=-1, keepdim=True)
 
     train_acc = evaluator.eval({
