@@ -178,7 +178,7 @@ class GeniePathLazy(torch.nn.Module):
         #if breadth_model == 'GAT':
         #self.breaths = torch.nn.ModuleList([Breadth(dim, dim, head_num) for i in range(num_layer)])
         # elif breadth_model == 'SGC':
-        self.breaths = torch.nn.ModuleList([Breadth(dim, dim, last=False) for i in range(num_layer)-1])
+        self.breaths = torch.nn.ModuleList([Breadth(dim, dim, last=False) for i in range(num_layer-1)])
         self.breaths.append(Breadth(dim, dim, last=True))
         self.depths = torch.nn.ModuleList([Depth(dim * 2, lstm_hidden) for i in range(num_layer)])
         self.lin2 = torch.nn.Linear(dim, out_dim)
