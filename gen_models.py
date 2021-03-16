@@ -308,7 +308,7 @@ def main():
         best_out = None
         for epoch in range(1, args.epochs):
             loss = train(model, x, y_true, train_idx, optimizer, genie=args.model=='genie', adj_t=data.adj_t.to(device))
-            result, out = test(model, x, y_true, split_idx, evaluator)
+            result, out = test(model, x, y_true, split_idx, evaluator, genie=args.model=='genie', adj_t=data.adj_t.to(device))
             train_acc, valid_acc, test_acc = result
             if valid_acc > best_valid:
                 best_valid = valid_acc
