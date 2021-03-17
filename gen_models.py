@@ -2,26 +2,15 @@ import argparse
 
 import torch
 import torch.nn.functional as F
-import torch.nn as nn
-from tqdm import tqdm
-
-
-from copy import deepcopy
 import torch_geometric.transforms as T
-from torch_geometric.nn import GCNConv, SAGEConv, GATConv
-from torch_sparse import SparseTensor
-from torch_geometric.utils import to_undirected
-import numpy as np
-
 
 from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
-from outcome_correlation import prepare_folder
-from diffusion_feature import preprocess
-import glob
 import os
 import shutil
 
+from diffusion_feature import preprocess
 from logger import Logger
+
 
 class MLP(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels, num_layers,
@@ -45,7 +34,7 @@ class MLP(torch.nn.Module):
         for bn in self.bns:
             bn.reset_parameters()
 
-    def forward(self, x):    
+    def forward(self, x):
         for i, lin in enumerate(self.lins[:-1]):
             x = lin(x)
             if self.relu_first:
@@ -53,13 +42,9 @@ class MLP(torch.nn.Module):
             x = self.bns[i](x)
             if not self.relu_first:
                 x = F.relu(x, inplace=True)
-
-
             x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.lins[-1](x)
         return F.log_softmax(x, dim=-1)
-        return x
-
 
 
 class MLPLinear(torch.nn.Module):
@@ -82,7 +67,6 @@ class SGC(torch.nn.Module):
     """
     def __init__(self, nfeat, nclass):
         super(SGC, self).__init__()
-
         self.W = torch.nn.Linear(nfeat, nclass)
 
     def reset_parameters(self):
@@ -92,224 +76,23 @@ class SGC(torch.nn.Module):
         return F.log_softmax(self.W(x), dim=-1)
 
 
-# class Breadth(torch.nn.Module):
-#     def __init__(self, in_dim, out_dim, headnum):
-#         super(Breadth, self).__init__()
-#         self.gatconv = GATConv(in_dim, out_dim, heads=headnum)
-#     def forward(self, x, edge_index):
-#         x = torch.tanh(self.gatconv(x, edge_index))
-#         return x
-#
-#
-# class Breadth(torch.nn.Module):
-#     def __init__(self, in_dim, out_dim, num_layers=1, dropout=0.5, last=False):
-#         super(Breadth, self).__init__()
-#         if not last:
-#             self.sgcconv = MLP(in_dim, out_dim, out_dim, num_layers, dropout)
-#         else:
-#             self.sgcconv = MLPLinear(in_dim, out_dim)
-#     def forward(self, x, edge_index):
-#         x = torch.tanh(self.sgcconv(x))
-#         return x
-#
-#
-#
-#
-# class Depth(torch.nn.Module):
-#     def __init__(self, in_dim, hidden):
-#         super(Depth, self).__init__()
-#         self.lstm = torch.nn.LSTM(in_dim, hidden, 1, bias=False)
-#
-#     def forward(self, x, h, c):
-#         x, (h, c) = self.lstm(x, (h, c))
-#         return x, (h, c)
-#
-# #todo:
-# class GeniePathLayer(torch.nn.Module):
-#     def __init__(self, in_dim, dim, headnum, lstm_hidden):
-#         super(GeniePathLayer, self).__init__()
-#         #gat
-#         #self.breadth_func = Breadth(in_dim, dim, headnum)
-#         self.breadth_func = Breadth(in_dim, dim, 1, 0.5)
-#
-#         self.depth_func = Depth(dim, lstm_hidden)
-#
-#     def forward(self, x, edge_index, h, c):
-#         x = self.breadth_func(x, edge_index)
-#         x = x[None, :]
-#         x, (h, c) = self.depth_func(x, h, c)
-#         x = x[0]
-#         return x, (h, c)
-#
-#
-# class GeniePath(torch.nn.Module):
-#     def __init__(self, in_dim, out_dim, head_num, lstm_hidden, num_layer, dim, residual_weight, device):
-#         super(GeniePath, self).__init__()
-#         self.lstm_hidden = lstm_hidden
-#         self.device = device
-#         self.lin1 = torch.nn.Linear(in_dim, dim)
-#         self.gplayers = torch.nn.ModuleList([GeniePathLayer(dim, dim, head_num, lstm_hidden) for i in range(num_layer)])
-#         self.lin2 = torch.nn.Linear(dim, out_dim)
-#         self.residual_weight = residual_weight
-#
-#     def reset_parameters(self):
-#         pass
-#
-#     def forward(self, x, edge_index):
-#         x = self.lin1(x)
-#         input = x
-#         h = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
-#         c = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
-#         for i, l in enumerate(self.gplayers):
-#             x, (h, c) = self.gplayers[i](x, edge_index, h, c)
-#             #add skip layer
-#             x = x+input*self.residual_weight
-#
-#         x = self.lin2(x)
-#         return x
-#
-#
-# class GeniePathLazy(torch.nn.Module):
-#     def __init__(self, in_dim, out_dim, head_num, lstm_hidden, num_layer, dim, residual_weight, device):
-#         super(GeniePathLazy, self).__init__()
-#         self.device = device
-#         self.lstm_hidden = lstm_hidden
-#         self.lin1 = torch.nn.Linear(in_dim, dim)
-#         #if breadth_model == 'GAT':
-#         #self.breaths = torch.nn.ModuleList([Breadth(dim, dim, head_num) for i in range(num_layer)])
-#         # elif breadth_model == 'SGC':
-#         self.breaths = torch.nn.ModuleList([Breadth(dim, dim, last=False) for i in range(num_layer)])
-#         #self.breaths.append(Breadth(dim, dim, last=True))
-#         self.depths = torch.nn.ModuleList([Depth(dim * 2, lstm_hidden) for i in range(num_layer)])
-#         self.lin2 = torch.nn.Linear(dim, out_dim)
-#         self.residual_weight = residual_weight
-#
-#     def reset_parameters(self):
-#         pass
-#
-#     def forward(self, x, edge_index):
-#         x = self.lin1(x)
-#
-#         #inp = x
-#         h = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
-#         c = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
-#         h_tmps = []
-#         for i, l in enumerate(self.breaths):
-#             h_tmps.append(self.breaths[i](x, edge_index))
-#         x = x[None, :]
-#         inp = x
-#         for i, l in enumerate(self.depths):
-#             in_cat = torch.cat((h_tmps[i][None, :], x), -1)
-#             x, (h, c) = self.depths[i](in_cat, h, c)
-#             x = x+self.residual_weight*inp
-#         x = self.lin2(x[0])
-#         return F.log_softmax(x, dim=-1)
+def prepare_folder(name, model):
+    model_dir = f'models/{name}'
 
+    if os.path.exists(model_dir):
+        shutil.rmtree(model_dir)
+    os.makedirs(model_dir)
+    with open(f'{model_dir}/metadata', 'w') as f:
+        f.write(f'# of params: {sum(p.numel() for p in model.parameters())}\n')
+    return model_dir
 
-class Breadth(torch.nn.Module):
-    def __init__(self, in_dim, out_dim, headnum):
-        super(Breadth, self).__init__()
-        self.gatconv = GATConv(in_dim, out_dim, heads=headnum)
-    def forward(self, x, edge_index):
-        x = torch.tanh(self.gatconv(x, edge_index))
-        return x
-
-
-class Depth(torch.nn.Module):
-    def __init__(self, in_dim, hidden):
-        super(Depth, self).__init__()
-        self.lstm = torch.nn.LSTM(in_dim, hidden, 1, bias=False)
-
-    def forward(self, x, h, c):
-        x, (h, c) = self.lstm(x, (h, c))
-        return x, (h, c)
-
-#todo:
-class GeniePathLayer(torch.nn.Module):
-    def __init__(self, in_dim, dim, headnum, lstm_hidden):
-        super(GeniePathLayer, self).__init__()
-        self.breadth_func = Breadth(in_dim, dim, headnum)
-        self.depth_func = Depth(dim, lstm_hidden)
-
-    def forward(self, x, edge_index, h, c):
-        x = self.breadth_func(x, edge_index)
-        x = x[None, :]
-        x, (h, c) = self.depth_func(x, h, c)
-        x = x[0]
-        return x, (h, c)
-
-
-
-
-class GeniePath(torch.nn.Module):
-    def __init__(self, in_dim, out_dim, head_num, lstm_hidden, num_layer, dim, residual_weight, device):
-        super(GeniePath, self).__init__()
-        self.lstm_hidden = lstm_hidden
-        self.device = device
-        self.lin1 = torch.nn.Linear(in_dim, dim)
-        self.gplayers = torch.nn.ModuleList([GeniePathLayer(dim, dim, head_num, lstm_hidden) for i in range(num_layer)])
-        self.lin2 = torch.nn.Linear(dim, out_dim)
-        self.residual_weight = residual_weight
-
-    def forward(self, x, edge_index):
-        x = self.lin1(x)
-        input = x
-        h = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
-        c = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
-        for i, l in enumerate(self.gplayers):
-            x, (h, c) = self.gplayers[i](x, edge_index, h, c)
-            #add skip layer
-            x = x+input*self.residual_weight
-
-        x = self.lin2(x)
-        return x
-
-
-class GeniePathLazy(torch.nn.Module):
-    def __init__(self, in_dim, out_dim, head_num, lstm_hidden, num_layer, dim, residual_weight, device):
-        super(GeniePathLazy, self).__init__()
-        self.device = device
-        self.lstm_hidden = lstm_hidden
-        self.lin1 = torch.nn.Linear(in_dim, dim)
-        #if breadth_model == 'GAT':
-        self.breaths = torch.nn.ModuleList([Breadth(dim, dim, head_num) for i in range(num_layer)])
-        # elif breadth_model == 'SGC':
-        #     self.breaths = torch.nn.ModuleList([Breadth(dim, dim, normalization, degree, device) for i in range(num_layer)])
-        self.depths = torch.nn.ModuleList([Depth(dim * 2, lstm_hidden) for i in range(num_layer)])
-        self.lin2 = torch.nn.Linear(dim, out_dim)
-        self.residual_weight = residual_weight
-
-    def reset_parameters(self):
-        pass
-
-    def forward(self, x, edge_index):
-        x = self.lin1(x)
-
-        #inp = x
-        h = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
-        c = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
-        h_tmps = []
-        for i, l in enumerate(self.breaths):
-            h_tmps.append(self.breaths[i](x, edge_index))
-        x = x[None, :]
-        inp = x
-        for i, l in enumerate(self.depths):
-            in_cat = torch.cat((h_tmps[i][None, :], x), -1)
-            x, (h, c) = self.depths[i](in_cat, h, c)
-            x = x+self.residual_weight*inp
-        x = self.lin2(x[0])
-        return F.log_softmax(x, dim=-1)
 
 def train(model, x, y_true, train_idx, optimizer, genie=False, adj_t=None):
     model.train()
-
     optimizer.zero_grad()
-    if genie:
-        out = model(x, adj_t)[train_idx]
-    else: out = model(x[train_idx])
-    loss = F.nll_loss(out, y_true.squeeze(1)[train_idx])
-    # loss = F.cross_entropy(out, y_true.squeeze(1)[train_idx])
+    out = model(x, adj_t)[train_idx] if genie else model(x[train_idx])
 
+    loss = F.nll_loss(out, y_true.squeeze(1)[train_idx])
     loss.backward()
     optimizer.step()
 
@@ -319,11 +102,7 @@ def train(model, x, y_true, train_idx, optimizer, genie=False, adj_t=None):
 @torch.no_grad()
 def test(model, x, y, split_idx, evaluator, genie=False, adj_t=None):
     model.eval()
-
-    if genie:
-        out = model(x, adj_t)
-    else: out = model(x)
-
+    out = model(x, adj_t) if genie else model(x)
     y_pred = out.argmax(dim=-1, keepdim=True)
 
     train_acc = evaluator.eval({
@@ -341,9 +120,7 @@ def test(model, x, y, split_idx, evaluator, genie=False, adj_t=None):
 
     return (train_acc, valid_acc, test_acc), out
 
-    
-        
-            
+
 def main():
     parser = argparse.ArgumentParser(description='gen_models')
     parser.add_argument('--device', type=int, default=0)
@@ -353,9 +130,16 @@ def main():
     parser.add_argument('--num_layers', type=int, default=3)
     parser.add_argument('--hidden_channels', type=int, default=256)
     parser.add_argument('--use_embeddings', action='store_true')
+    parser.add_argument('--use_diffusion',  type=bool, default=True)
+    parser.add_argument('--use_sgc',  type=bool, default=True)
+    parser.add_argument('--use_sgc_cache', type=bool, default=True)
+    parser.add_argument('--pair_norm', type=str, default="PN-SI")
+    parser.add_argument('--use_spectral', action='store_true')
+    parser.add_argument('--num_propagations', type=int, default=50)
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--epochs', type=int, default=300)
+    parser.add_argument('--epochs_print', type=int, default=10)
     parser.add_argument('--runs', type=int, default=10)
     parser.add_argument('--head_num', type=int, default=1)
     parser.add_argument('--lstm_hidden', type=int, default=256)
@@ -366,7 +150,6 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    
     device = f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
 
@@ -377,23 +160,24 @@ def main():
     
     x = data.x
 
-    
     split_idx = dataset.get_idx_split()
     preprocess_data = PygNodePropPredDataset(name=f'ogbn-{args.dataset}')[0]
-    if args.dataset == 'arxiv':
-        embeddings = torch.cat([
-            preprocess(preprocess_data, 'diffusion', post_fix=args.dataset),
-            preprocess(preprocess_data, 'sgc', post_fix=args.dataset, num_propagations=50, use_cache=True, pairnorm=True),
-            preprocess(preprocess_data, 'spectral', post_fix=args.dataset)
-        ], dim=-1)
-    elif args.dataset == 'products':
-        embeddings = torch.cat([
-            # preprocess(preprocess_data, 'diffusion', post_fix=args.dataset),
-            preprocess(preprocess_data, 'sgc', post_fix=args.dataset, num_propagations=50, use_cache=True, pairnorm=True),
-            # preprocess(preprocess_data, 'spectral', post_fix=args.dataset)
-        ], dim=-1)
-        # embeddings = preprocess(preprocess_data, 'spectral', post_fix=args.dataset)
 
+    embeddings_list = []
+    if args.use_embeddings:
+        if args.use_diffusion:
+            embeddings_list.append(preprocess(preprocess_data, 'diffusion', post_fix=args.dataset))
+        if args.use_sgc:
+            embeddings_list.append(preprocess(preprocess_data, 'sgc', post_fix=args.dataset,
+                num_propagations=args.num_propagations, use_cache=args.use_sgc_cache, pairnorm=args.pair_norm))
+        if args.use_spectral:
+            embeddings_list.append(preprocess(preprocess_data, 'spectral', post_fix=args.dataset))
+
+    if args.dataset == 'arxiv' and args.use_embeddings:
+        embeddings = torch.cat(embeddings_list, dim=-1)
+
+    elif args.dataset == 'products' and args.use_embeddings:
+        embeddings = torch.cat(embeddings_list, dim=-1)
 
     if args.use_embeddings:
         x = torch.cat([x, embeddings], dim=-1)
@@ -410,15 +194,14 @@ def main():
     elif args.model=='sgc':
         model = SGC(x.size(-1), dataset.num_classes).to(device)
     elif args.model=='genie':
-        model = GeniePathLazy(x.size(-1), dataset.num_classes, args.head_num, args.lstm_hidden, args.num_layer, args.genie_dim, args.residual_weight, args.device).to(device)
+        raise NotImplementedError
+        # model = GeniePathLazy(x.size(-1), dataset.num_classes, args.head_num, args.lstm_hidden, args.num_layer, args.genie_dim, args.residual_weight, args.device).to(device)
 
     x = x.to(device)
     y_true = data.y.to(device)
     train_idx = split_idx['train'].to(device)
 
-    
     model_dir = prepare_folder(f'{args.dataset}_{args.model}', model)
-
     
     evaluator = Evaluator(name=f'ogbn-{args.dataset}')
     logger = Logger(args.runs, args)
@@ -439,7 +222,7 @@ def main():
                 best_valid = valid_acc
                 best_out = out.cpu().exp()
 
-            if (epoch % 10 == 0):
+            if epoch % args.epochs_print == 0:
                 print(f'Run: {run + 1:02d}, '
                           f'Epoch: {epoch:02d}, '
                           f'Loss: {loss:.4f}, '
@@ -452,8 +235,6 @@ def main():
         torch.save(best_out, f'{model_dir}/{run}.pt')
 
     logger.print_statistics()
-
-
 
 
 if __name__ == "__main__":
