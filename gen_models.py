@@ -31,10 +31,10 @@ class MLP(torch.nn.Module):
         self.lins.append(torch.nn.Linear(in_channels, hidden_channels))
         self.bns = torch.nn.ModuleList()
         self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
-        # for _ in range(num_layers - 2):
-        #     self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
-        #     self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
-        # self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
+        for _ in range(num_layers - 2):
+            self.lins.append(torch.nn.Linear(hidden_channels, hidden_channels))
+            self.bns.append(torch.nn.BatchNorm1d(hidden_channels))
+        self.lins.append(torch.nn.Linear(hidden_channels, out_channels))
 
         self.dropout = dropout
         self.relu_first = relu_first
@@ -56,8 +56,8 @@ class MLP(torch.nn.Module):
 
 
             x = F.dropout(x, p=self.dropout, training=self.training)
-        # x = self.lins[-1](x)
-        # return F.log_softmax(x, dim=-1)
+        x = self.lins[-1](x)
+        return F.log_softmax(x, dim=-1)
         return x
 
 
@@ -89,7 +89,7 @@ class SGC(torch.nn.Module):
         self.W.reset_parameters()
 
     def forward(self, x):
-        return self.W(x)
+        return F.log_softmax(self.W(x), dim=-1)
 
 
 # class Breadth(torch.nn.Module):
@@ -276,7 +276,7 @@ def main():
     device = torch.device(device)
 
     dataset = PygNodePropPredDataset(name=f'ogbn-{args.dataset}',transform=T.ToSparseTensor())
-    
+
     data = dataset[0]
     data.adj_t = data.adj_t.to_symmetric()
     
