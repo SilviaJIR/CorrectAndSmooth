@@ -13,8 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from matplotlib import pyplot as plt
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
-# from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
-from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
+from ogb.nodeproppred import DglNodePropPredDataset, Evaluator
 from outcome_correlation import prepare_folder
 
 from models import GAT
