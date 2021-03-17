@@ -99,20 +99,120 @@ class SGC(torch.nn.Module):
 #     def forward(self, x, edge_index):
 #         x = torch.tanh(self.gatconv(x, edge_index))
 #         return x
+#
+#
+# class Breadth(torch.nn.Module):
+#     def __init__(self, in_dim, out_dim, num_layers=1, dropout=0.5, last=False):
+#         super(Breadth, self).__init__()
+#         if not last:
+#             self.sgcconv = MLP(in_dim, out_dim, out_dim, num_layers, dropout)
+#         else:
+#             self.sgcconv = MLPLinear(in_dim, out_dim)
+#     def forward(self, x, edge_index):
+#         x = torch.tanh(self.sgcconv(x))
+#         return x
+#
+#
+#
+#
+# class Depth(torch.nn.Module):
+#     def __init__(self, in_dim, hidden):
+#         super(Depth, self).__init__()
+#         self.lstm = torch.nn.LSTM(in_dim, hidden, 1, bias=False)
+#
+#     def forward(self, x, h, c):
+#         x, (h, c) = self.lstm(x, (h, c))
+#         return x, (h, c)
+#
+# #todo:
+# class GeniePathLayer(torch.nn.Module):
+#     def __init__(self, in_dim, dim, headnum, lstm_hidden):
+#         super(GeniePathLayer, self).__init__()
+#         #gat
+#         #self.breadth_func = Breadth(in_dim, dim, headnum)
+#         self.breadth_func = Breadth(in_dim, dim, 1, 0.5)
+#
+#         self.depth_func = Depth(dim, lstm_hidden)
+#
+#     def forward(self, x, edge_index, h, c):
+#         x = self.breadth_func(x, edge_index)
+#         x = x[None, :]
+#         x, (h, c) = self.depth_func(x, h, c)
+#         x = x[0]
+#         return x, (h, c)
+#
+#
+# class GeniePath(torch.nn.Module):
+#     def __init__(self, in_dim, out_dim, head_num, lstm_hidden, num_layer, dim, residual_weight, device):
+#         super(GeniePath, self).__init__()
+#         self.lstm_hidden = lstm_hidden
+#         self.device = device
+#         self.lin1 = torch.nn.Linear(in_dim, dim)
+#         self.gplayers = torch.nn.ModuleList([GeniePathLayer(dim, dim, head_num, lstm_hidden) for i in range(num_layer)])
+#         self.lin2 = torch.nn.Linear(dim, out_dim)
+#         self.residual_weight = residual_weight
+#
+#     def reset_parameters(self):
+#         pass
+#
+#     def forward(self, x, edge_index):
+#         x = self.lin1(x)
+#         input = x
+#         h = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
+#         c = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
+#         for i, l in enumerate(self.gplayers):
+#             x, (h, c) = self.gplayers[i](x, edge_index, h, c)
+#             #add skip layer
+#             x = x+input*self.residual_weight
+#
+#         x = self.lin2(x)
+#         return x
+#
+#
+# class GeniePathLazy(torch.nn.Module):
+#     def __init__(self, in_dim, out_dim, head_num, lstm_hidden, num_layer, dim, residual_weight, device):
+#         super(GeniePathLazy, self).__init__()
+#         self.device = device
+#         self.lstm_hidden = lstm_hidden
+#         self.lin1 = torch.nn.Linear(in_dim, dim)
+#         #if breadth_model == 'GAT':
+#         #self.breaths = torch.nn.ModuleList([Breadth(dim, dim, head_num) for i in range(num_layer)])
+#         # elif breadth_model == 'SGC':
+#         self.breaths = torch.nn.ModuleList([Breadth(dim, dim, last=False) for i in range(num_layer)])
+#         #self.breaths.append(Breadth(dim, dim, last=True))
+#         self.depths = torch.nn.ModuleList([Depth(dim * 2, lstm_hidden) for i in range(num_layer)])
+#         self.lin2 = torch.nn.Linear(dim, out_dim)
+#         self.residual_weight = residual_weight
+#
+#     def reset_parameters(self):
+#         pass
+#
+#     def forward(self, x, edge_index):
+#         x = self.lin1(x)
+#
+#         #inp = x
+#         h = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
+#         c = torch.zeros(1, x.shape[0], self.lstm_hidden).to(self.device)
+#         h_tmps = []
+#         for i, l in enumerate(self.breaths):
+#             h_tmps.append(self.breaths[i](x, edge_index))
+#         x = x[None, :]
+#         inp = x
+#         for i, l in enumerate(self.depths):
+#             in_cat = torch.cat((h_tmps[i][None, :], x), -1)
+#             x, (h, c) = self.depths[i](in_cat, h, c)
+#             x = x+self.residual_weight*inp
+#         x = self.lin2(x[0])
+#         return F.log_softmax(x, dim=-1)
 
 
 class Breadth(torch.nn.Module):
-    def __init__(self, in_dim, out_dim, num_layers=1, dropout=0.5, last=False):
+    def __init__(self, in_dim, out_dim, headnum):
         super(Breadth, self).__init__()
-        if not last:
-            self.sgcconv = MLP(in_dim, out_dim, out_dim, num_layers, dropout)
-        else:
-            self.sgcconv = MLPLinear(in_dim, out_dim)
+        self.gatconv = GATConv(in_dim, out_dim, heads=headnum)
     def forward(self, x, edge_index):
-        x = torch.tanh(self.sgcconv(x))
+        x = torch.tanh(self.gatconv(x, edge_index))
         return x
-
-
 
 
 class Depth(torch.nn.Module):
@@ -128,10 +228,7 @@ class Depth(torch.nn.Module):
 class GeniePathLayer(torch.nn.Module):
     def __init__(self, in_dim, dim, headnum, lstm_hidden):
         super(GeniePathLayer, self).__init__()
-        #gat
-        #self.breadth_func = Breadth(in_dim, dim, headnum)
-        self.breadth_func = Breadth(in_dim, dim, 1, 0.5)
-
+        self.breadth_func = Breadth(in_dim, dim, headnum)
         self.depth_func = Depth(dim, lstm_hidden)
 
     def forward(self, x, edge_index, h, c):
@@ -140,6 +237,8 @@ class GeniePathLayer(torch.nn.Module):
         x, (h, c) = self.depth_func(x, h, c)
         x = x[0]
         return x, (h, c)
+
+
 
 
 class GeniePath(torch.nn.Module):
@@ -151,9 +250,6 @@ class GeniePath(torch.nn.Module):
         self.gplayers = torch.nn.ModuleList([GeniePathLayer(dim, dim, head_num, lstm_hidden) for i in range(num_layer)])
         self.lin2 = torch.nn.Linear(dim, out_dim)
         self.residual_weight = residual_weight
-
-    def reset_parameters(self):
-        pass
 
     def forward(self, x, edge_index):
         x = self.lin1(x)
@@ -176,10 +272,9 @@ class GeniePathLazy(torch.nn.Module):
         self.lstm_hidden = lstm_hidden
         self.lin1 = torch.nn.Linear(in_dim, dim)
         #if breadth_model == 'GAT':
-        #self.breaths = torch.nn.ModuleList([Breadth(dim, dim, head_num) for i in range(num_layer)])
+        self.breaths = torch.nn.ModuleList([Breadth(dim, dim, head_num) for i in range(num_layer)])
         # elif breadth_model == 'SGC':
-        self.breaths = torch.nn.ModuleList([Breadth(dim, dim, last=False) for i in range(num_layer)])
-        #self.breaths.append(Breadth(dim, dim, last=True))
+        #     self.breaths = torch.nn.ModuleList([Breadth(dim, dim, normalization, degree, device) for i in range(num_layer)])
         self.depths = torch.nn.ModuleList([Depth(dim * 2, lstm_hidden) for i in range(num_layer)])
         self.lin2 = torch.nn.Linear(dim, out_dim)
         self.residual_weight = residual_weight
