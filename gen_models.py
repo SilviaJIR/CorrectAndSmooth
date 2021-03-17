@@ -381,10 +381,19 @@ def main():
     split_idx = dataset.get_idx_split()
     preprocess_data = PygNodePropPredDataset(name=f'ogbn-{args.dataset}')[0]
     if args.dataset == 'arxiv':
-        embeddings = torch.cat([preprocess(preprocess_data, 'diffusion', post_fix=args.dataset),
-                                preprocess(preprocess_data, 'spectral', post_fix=args.dataset)], dim=-1)
+        embeddings = torch.cat([
+            preprocess(preprocess_data, 'diffusion', post_fix=args.dataset),
+            preprocess(preprocess_data, 'sgc', post_fix=args.dataset, num_propagations=50, use_cache=True, pairnorm=True),
+            preprocess(preprocess_data, 'spectral', post_fix=args.dataset)
+        ], dim=-1)
     elif args.dataset == 'products':
-        embeddings = preprocess(preprocess_data, 'spectral', post_fix=args.dataset)
+        embeddings = torch.cat([
+            # preprocess(preprocess_data, 'diffusion', post_fix=args.dataset),
+            preprocess(preprocess_data, 'sgc', post_fix=args.dataset, num_propagations=50, use_cache=True, pairnorm=True),
+            # preprocess(preprocess_data, 'spectral', post_fix=args.dataset)
+        ], dim=-1)
+        # embeddings = preprocess(preprocess_data, 'spectral', post_fix=args.dataset)
+
 
     if args.use_embeddings:
         x = torch.cat([x, embeddings], dim=-1)

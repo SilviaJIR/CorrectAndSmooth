@@ -46,30 +46,35 @@ class PairNorm(torch.nn.Module):
         if self.mode == 'None':
             return x
 
-        col_mean = x.mean(dim=0)
+        col_mean = x.mean(0)
         if self.mode == 'PN':
             x = x - col_mean
-            rownorm_mean = (1e-6 + x.pow(2).sum(dim=1).mean()).sqrt()
+            rownorm_mean = np.sqrt((1e-6 + np.power(x, 2).sum(1).mean()))
             x = self.scale * x / rownorm_mean
 
         if self.mode == 'PN-SI':
             x = x - col_mean
-            rownorm_individual = (1e-6 + x.pow(2).sum(dim=1, keepdim=True)).sqrt()
+            rownorm_individual = np.sqrt((1e-6 + np.power(x, 2).sum(1, keepdims=True)))
             x = self.scale * x / rownorm_individual
 
         if self.mode == 'PN-SCS':
-            rownorm_individual = (1e-6 + x.pow(2).sum(dim=1, keepdim=True)).sqrt()
+            rownorm_individual = (1e-6 + x.pow(2).sum(dim=1, keepdims=True)).sqrt()
             x = self.scale * x / rownorm_individual - col_mean
 
         return x
 
 
-def sgc(x, adj, num_propagations):
-    norm = PairNorm("PN", 10)
-    x = norm(x)
-    for _ in tqdm(range(num_propagations)):
-        x = adj @ x
+def sgc(x, adj, num_propagations, pairnorm=False):
+    if pairnorm:
+        norm = PairNorm("PN-SI", 1)
         x = norm(x)
+        print("SGC layers =", num_propagations)
+        for _ in tqdm(range(num_propagations)):
+            x = adj @ x
+            x = norm(x)
+    else:
+        for _ in tqdm(range(num_propagations)):
+            x = adj @ x
 
     return torch.from_numpy(x).to(torch.float)
 
@@ -150,7 +155,7 @@ def spectral(data, post_fix):
 
 
 
-def preprocess(data, preprocess = "diffusion", num_propagations = 10, p = None, alpha = None, use_cache = True, post_fix = ""):
+def preprocess(data, preprocess = "diffusion", num_propagations = 10, p = None, alpha = None, use_cache = True, post_fix = "", pairnorm = False):
     if use_cache:
         try:
             x = torch.load(f'embeddings/{preprocess}{post_fix}.pt')
@@ -188,7 +193,7 @@ def preprocess(data, preprocess = "diffusion", num_propagations = 10, p = None, 
     print(f'Start {preprocess} processing')
 
     if preprocess == "sgc":
-        result = sgc(data.x.numpy(), adj, num_propagations)
+        result = sgc(data.x.numpy(), adj, num_propagations, pairnorm)
 #     if preprocess == "lp":
 #         result = lp(adj, data.y.data, num_propagations, p = p, alpha = alpha, preprocess = preprocess)
     if preprocess == "diffusion":
