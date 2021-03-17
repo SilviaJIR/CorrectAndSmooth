@@ -153,6 +153,9 @@ def main():
     device = f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
 
+    if not os.path.exists('embeddings'):
+        os.makedirs('embeddings')
+
     dataset = PygNodePropPredDataset(name=f'ogbn-{args.dataset}',transform=T.ToSparseTensor())
 
     data = dataset[0]
@@ -187,13 +190,13 @@ def main():
 
     if args.model == 'mlp':        
         model = MLP(x.size(-1),args.hidden_channels, dataset.num_classes, args.num_layers, 0.5, args.dataset == 'products').to(device)
-    elif args.model=='linear':
+    elif args.model == 'linear':
         model = MLPLinear(x.size(-1), dataset.num_classes).to(device)
-    elif args.model=='plain':
+    elif args.model == 'plain':
         model = MLPLinear(x.size(-1), dataset.num_classes).to(device)
-    elif args.model=='sgc':
+    elif args.model == 'sgc':
         model = SGC(x.size(-1), dataset.num_classes).to(device)
-    elif args.model=='genie':
+    elif args.model == 'genie':
         raise NotImplementedError
         # model = GeniePathLazy(x.size(-1), dataset.num_classes, args.head_num, args.lstm_hidden, args.num_layer, args.genie_dim, args.residual_weight, args.device).to(device)
 
