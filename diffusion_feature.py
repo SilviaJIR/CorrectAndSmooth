@@ -67,7 +67,12 @@ def sgc(x, adj, num_propagations, pairnorm=False):
     return torch.from_numpy(x).to(torch.float)
 
 
-def diffusion(x, adj, num_propagations, p=1, alpha=0.5):
+def diffusion(x, adj, num_propagations, p, alpha):
+    if p is None:
+        p = 1.
+    if alpha is None:
+        alpha = 0.5
+
     x = x ** p
     for _ in tqdm(range(num_propagations)):
         x = x - alpha * (sparse.eye(adj.shape[0]) - adj) @ x
@@ -130,7 +135,7 @@ def preprocess(data, preprocess="diffusion", num_propagations=10, p=None, alpha=
     if preprocess == "sgc":
         result = sgc(data.x.numpy(), adj, num_propagations, pairnorm)
     if preprocess == "diffusion":
-        result = diffusion(data.x.numpy(), adj, num_propagations, p = p, alpha = alpha)
+        result = diffusion(data.x.numpy(), adj, num_propagations, p=p, alpha = alpha)
 
     torch.save(result, f'embeddings/{preprocess}{post_fix}.pt')
     
