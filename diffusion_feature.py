@@ -125,9 +125,12 @@ def preprocess(data, preprocess="diffusion", num_propagations=10, p=None, alpha=
     adj = SparseTensor(row=row, col=col, sparse_sizes=(N, N))
     adj = adj.set_diag()
     deg = adj.sum(dim=1).to(torch.float)
-    deg_inv_sqrt = deg.pow(-0.5)
+    # deg_inv_sqrt = deg.pow(-0.5)
+    # deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+    # adj = deg_inv_sqrt.view(-1, 1) * adj * deg_inv_sqrt.view(1, -1)
+    deg_inv_sqrt = deg.pow(-1)
     deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
-    adj = deg_inv_sqrt.view(-1, 1) * adj * deg_inv_sqrt.view(1, -1)
+    adj = deg_inv_sqrt.view(-1, 1) * adj
     adj = adj.to_scipy(layout='csr')
 
     print(f'Start {preprocess} processing')
