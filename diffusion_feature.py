@@ -11,6 +11,7 @@ from copy import deepcopy
 import numpy as np
 from scipy import sparse
 from torch_scatter import scatter
+import networkx as nx
 
 import h5py
 import os
@@ -80,26 +81,23 @@ def community(data, post_fix):
         
     return result
 
+
 def spectral(data, post_fix):
-    # from julia.api import Julia
-    # jl = Julia(compiled_modules=False)
-    # from julia import Main
-    # Main.include("./norm_spec.jl")
     print('Setting up spectral embedding')
     data.edge_index = to_undirected(data.edge_index)
     np_edge_index = np.array(data.edge_index.T)
 
-    
     N = data.num_nodes
     row, col = data.edge_index
     adj = SparseTensor(row=row, col=col, sparse_sizes=(N, N))
     adj = adj.to_scipy(layout='csr')
 
+    G = nx.from_scipy_sparse_matrix(adj)
+    lap_mtx = nx.normalized_laplacian_matrix(G)
     tsvd = TruncatedSVD(n_components=128)
-    adj_tsvd = tsvd.fit(adj).transform(adj)
-    result = torch.tensor(adj_tsvd).float()
+    adj_tsvd = tsvd.fit(lap_mtx).transform(lap_mtx)
 
-    # result = torch.tensor(adj.todense()).float()
+    result = torch.tensor(adj_tsvd).float()
     torch.save(result, f'embeddings/spectral{post_fix}.pt')
         
     return result
